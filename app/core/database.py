@@ -56,6 +56,12 @@ def build_engine():
 
     # Remove SSL parameters from URL if included
     clean_url = settings.DATABASE_URL.unicode_string().split("?")[0]
+    
+    # Ensure async driver
+    if clean_url.startswith("postgresql://"):
+        clean_url = clean_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif clean_url.startswith("postgresql+psycopg2://"):
+        clean_url = clean_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
 
     return create_async_engine(clean_url, **engine_kwargs)
 
