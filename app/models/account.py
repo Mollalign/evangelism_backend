@@ -11,7 +11,7 @@ class Account(BaseModel):
     email = Column(String(255), nullable=True)
     phone_number = Column(String(50), nullable=True)
     location = Column(String(255), nullable=True)
-    created_by = Column(UUID(as_uuid=True), nullable=False) # References User.id, but we might not want a hard FK constraint if users can be deleted? Actually, created_by usually should be a hard FK. Let's assume hard FK for integrity.
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Relationships

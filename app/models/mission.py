@@ -13,7 +13,7 @@ class Mission(BaseModel):
     end_date = Column(DateTime(timezone=True), nullable=True)
     location = Column(JSON, nullable=True)
     budget = Column(Float, nullable=True)
-    created_by = Column(UUID(as_uuid=True), nullable=False) # References User.id
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
