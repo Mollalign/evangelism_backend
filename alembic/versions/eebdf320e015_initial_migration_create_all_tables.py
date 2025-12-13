@@ -9,7 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 
 # revision identifiers, used by Alembic.
@@ -36,42 +36,52 @@ def upgrade() -> None:
     op.create_index(op.f('ix_outreach_numbers_mission_id'), 'outreach_numbers', ['mission_id'], unique=True)
     
     # Add account_id column to roles table
-    # First add as nullable to handle existing data
-    op.add_column('roles', sa.Column('account_id', sa.UUID(), nullable=True))
-    
-    # Check if there are existing roles and handle them
-    # Option 1: Delete existing roles (if they're not needed)
-    # Option 2: Assign to a default account (if accounts exist)
-    # We'll use a safe approach: delete existing roles if no account_id can be determined
+    # First check if column already exists (in case of partial migration)
     connection = op.get_bind()
+    inspector = inspect(connection)
+    columns = [col['name'] for col in inspector.get_columns('roles')]
     
-    # Check if there are any roles
-    result = connection.execute(text("SELECT COUNT(*) FROM roles"))
-    role_count = result.scalar()
-    
-    if role_count > 0:
-        # Check if there are any accounts
-        result = connection.execute(text("SELECT COUNT(*) FROM accounts"))
-        account_count = result.scalar()
+    if 'account_id' not in columns:
+        # First add as nullable to handle existing data
+        op.add_column('roles', sa.Column('account_id', sa.UUID(), nullable=True))
         
-        if account_count > 0:
-            # Get the first account ID to assign roles to
-            result = connection.execute(text("SELECT id FROM accounts LIMIT 1"))
-            first_account_id = result.scalar()
-            # Update all roles to use the first account
-            connection.execute(
-                text("UPDATE roles SET account_id = :account_id WHERE account_id IS NULL"),
-                {"account_id": first_account_id}
-            )
-        else:
-            # No accounts exist, delete existing roles
-            connection.execute(text("DELETE FROM roles"))
+        # Check if there are existing roles and handle them
+        # Option 1: Delete existing roles (if they're not needed)
+        # Option 2: Assign to a default account (if accounts exist)
+        # We'll use a safe approach: delete existing roles if no account_id can be determined
+        
+        # Check if there are any roles
+        result = connection.execute(text("SELECT COUNT(*) FROM roles"))
+        role_count = result.scalar()
+        
+        if role_count > 0:
+            # Check if there are any accounts
+            result = connection.execute(text("SELECT COUNT(*) FROM accounts"))
+            account_count = result.scalar()
+            
+            if account_count > 0:
+                # Get the first account ID to assign roles to
+                result = connection.execute(text("SELECT id FROM accounts LIMIT 1"))
+                first_account_id = result.scalar()
+                # Update all roles to use the first account
+                connection.execute(
+                    text("UPDATE roles SET account_id = :account_id WHERE account_id IS NULL"),
+                    {"account_id": first_account_id}
+                )
+            else:
+                # No accounts exist, delete existing roles
+                connection.execute(text("DELETE FROM roles"))
+        
+        # Now make the column NOT NULL
+        op.alter_column('roles', 'account_id', nullable=False)
     
-    # Now make the column NOT NULL
-    op.alter_column('roles', 'account_id', nullable=False)
-    
-    # Create foreign key constraint
-    op.create_foreign_key(None, 'roles', 'accounts', ['account_id'], ['id'])
+    # Create foreign key constraint (check if it doesn't already exist)
+    # Get existing foreign keys
+    fk_constraints = [fk['name'] for fk in inspector.get_foreign_keys('roles')]
+    # Create a named constraint to avoid conflicts
+    fk_name = 'roles_account_id_fkey'
+    if fk_name not in fk_constraints:
+        op.create_foreign_key(fk_name, 'roles', 'accounts', ['account_id'], ['id'])
     # ### end Alembic commands ###
 
 
