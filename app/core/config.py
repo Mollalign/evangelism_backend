@@ -42,9 +42,16 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     TIMEZONE: str = "UTC"
 
-    CORS_ORIGINS: List[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    CORS_ORIGINS: List[str] = Field(default_factory=lambda: [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:5000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
+        "http://127.0.0.1:5000",
+    ])
     FRONTEND_URL: Optional[str] = None
-    ALLOWED_HOSTS: List[str] = Field(default_factory=lambda: ["localhost"])
+    ALLOWED_HOSTS: List[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"])
 
     SQLALCHEMY_ECHO: bool = False
     DB_POOL_MIN_SIZE: Optional[int] = None
