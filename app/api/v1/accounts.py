@@ -63,3 +63,25 @@ async def request_join_account(
         
     await service.request_join_account(current_user, uuid_id)
     return {"message": "Join request sent successfully"}
+
+
+@router.get("/{account_id}", response_model=AccountResponse)
+async def get_account(
+    account_id: str,
+    db: AsyncSession = Depends(get_database_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get detailed information about a specific account.
+    """
+    service = AccountService(db)
+    # Check if UUID valid
+    try:
+        uuid_id = UUID(account_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid account ID format"
+        )
+        
+    return await service.get_account_by_id(uuid_id)

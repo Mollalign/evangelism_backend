@@ -80,6 +80,25 @@ class AccountService:
         await self.db.refresh(account)
         
         return AccountResponse.model_validate(account)
+
+    async def get_account_by_id(self, account_id: UUID) -> AccountResponse:
+        """
+        Get an account by ID.
+        
+        Args:
+            account_id: Account UUID
+            
+        Returns:
+            Account response
+        """
+        account = await self.account_repo.get_by_id(str(account_id))
+        if not account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Account not found"
+            )
+        
+        return AccountResponse.model_validate(account)
     
     async def get_user_accounts(self, user_id: UUID) -> List[dict]:
         """
