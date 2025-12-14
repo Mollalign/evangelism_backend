@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 # Import version routers
 # Import version routers
-from app.api.v1 import auth, missions, expenses, outreach, users, accounts
+from app.api.v1 import auth, missions, expenses, outreach, users, accounts, dashboard
 
 # Create main API router
 api_router = APIRouter()
@@ -20,6 +20,7 @@ api_router.include_router(missions.router, prefix="/v1/missions", tags=["Mission
 api_router.include_router(expenses.router, prefix="/v1/expenses", tags=["Expenses"])
 api_router.include_router(outreach.router, prefix="/v1/outreach", tags=["Outreach"])
 api_router.include_router(users.router, prefix="/v1/users", tags=["Users"])
+api_router.include_router(dashboard.router, prefix="/v1/dashboard", tags=["Dashboard"])
 
 # API info endpoint
 @api_router.get("/v1")
