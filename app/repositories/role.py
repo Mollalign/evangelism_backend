@@ -19,50 +19,31 @@ class RoleRepository(BaseRepository[Role]):
     def __init__(self, db: AsyncSession):
         super().__init__(Role, db)
     
-    async def get_by_account_id(self, account_id: UUID | str) -> List[Role]:
+    async def get_by_name(self, name: str) -> Optional[Role]:
         """
-        Get all roles for an account.
-        
-        Args:
-            account_id: Account UUID (as UUID or string)
-            
-        Returns:
-            List of Role instances
-        """
-        if isinstance(account_id, str):
-            try:
-                account_id = UUID(account_id)
-            except ValueError:
-                return []
-        
-        stmt = select(Role).where(Role.account_id == account_id)
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    async def get_by_name_and_account(
-        self,
-        name: str,
-        account_id: UUID | str
-    ) -> Optional[Role]:
-        """
-        Get role by name and account.
+        Get role by name.
         
         Args:
             name: Role name
-            account_id: Account UUID (as UUID or string)
             
         Returns:
             Role instance or None if not found
         """
-        if isinstance(account_id, str):
-            try:
-                account_id = UUID(account_id)
-            except ValueError:
-                return None
-        
-        stmt = select(Role).where(
-            Role.name == name,
-            Role.account_id == account_id
-        )
+        stmt = select(Role).where(Role.name == name)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def ensure_default_roles(self):
+        """
+        Ensure default roles exist in the database.
+        Seed: owner, admin, member, missionary, evangelist
+        """
+        default_roles = ["owner", "admin", "member", "missionary", "evangelist"]
+        for role_name in default_roles:
+            role = await self.get_by_name(role_name)
+            if not role:
+                await self.create(
+                    name=role_name,
+                    description=f"Global {role_name} role"
+                )
+# Removed account specific methods

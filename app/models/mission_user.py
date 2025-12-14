@@ -9,6 +9,8 @@ class MissionRole(str, enum.Enum):
     LEADER = "leader"
     MEMBER = "member"
     GUEST = "guest"
+    EVANGELIST = "evangelist"
+    MISSIONARY = "missionary"
 
 class MissionUser(BaseModel):
     __tablename__ = "mission_users"

@@ -4,10 +4,13 @@ Mission Schemas
 Pydantic models for mission-related requests and responses.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, EmailStr
 
+class MissionAssignment(BaseModel):
+    email: EmailStr
+    role: str = Field(..., description="Role: 'evangelist' or 'missionary'")
 
 class MissionCreate(BaseModel):
     """Mission creation schema."""
@@ -19,6 +22,7 @@ class MissionCreate(BaseModel):
     end_date: Optional[datetime] = Field(None, description="Mission end date")
     location: Optional[Dict[str, Any]] = Field(None, description="Location data (JSON)")
     budget: Optional[float] = Field(None, ge=0, description="Mission budget")
+    assignments: Optional[List[MissionAssignment]] = Field(default=[], description="List of users to assign to the mission")
     
     @field_validator("end_date")
     @classmethod

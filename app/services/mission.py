@@ -11,10 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.mission import MissionRepository
 from app.repositories.account import AccountRepository
+from app.repositories.user import UserRepository
+from app.repositories.mission_user import MissionUserRepository
+from app.repositories.account_user import AccountUserRepository
+from app.repositories.role import RoleRepository
 from app.models.mission import Mission
 from app.models.user import User
+from app.models.mission_user import MissionRole
 from app.schemas.mission import MissionCreate, MissionUpdate
-
+from app.utils.email import send_invitation_email
 
 class MissionService:
     """Service for mission operations."""
@@ -23,13 +28,17 @@ class MissionService:
         self.db = db
         self.mission_repo = MissionRepository(db)
         self.account_repo = AccountRepository(db)
+        self.user_repo = UserRepository(db)
+        self.mission_user_repo = MissionUserRepository(db)
+        self.account_user_repo = AccountUserRepository(db)
+        self.role_repo = RoleRepository(db)
     
     async def create_mission(
         self,
         mission_data: MissionCreate,
         current_user: User
     ) -> Mission:
-        """Create a new mission."""
+        """Create a new mission and handle assignments."""
         # Verify account exists and user has access
         account = await self.account_repo.get_by_id(mission_data.account_id)
         if not account:
@@ -38,6 +47,41 @@ class MissionService:
                 detail="Account not found"
             )
         
+    async def create_mission(
+        self,
+        mission_data: MissionCreate,
+        current_user: User
+    ) -> Mission:
+        """Create a new mission and handle assignments."""
+        # Verify account exists
+        account = await self.account_repo.get_by_id(mission_data.account_id)
+        if not account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Account not found"
+            )
+        
+        # Verify user has admin role in the account
+        # Requirement: "Only admin can create mission"
+        account_user = await self.account_user_repo.get_by_user_and_account(
+            current_user.id, 
+            account.id
+        )
+        
+        if not account_user:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this account"
+            )
+            
+        role = await self.role_repo.get_by_id(account_user.role_id)
+        # Check for admin OR owner
+        if not role or role.name not in ["admin", "owner"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only account admins/owners can create missions"
+            )
+             
         # Create mission
         mission = await self.mission_repo.create(
             account_id=UUID(mission_data.account_id),
@@ -49,10 +93,34 @@ class MissionService:
             created_by=current_user.id
         )
         
+        # Process assignments
+        if mission_data.assignments:
+            for assignment in mission_data.assignments:
+                user = await self.user_repo.get_by_email(assignment.email)
+                if user:
+                    # Assign directly
+                    try:
+                        role_enum = MissionRole(assignment.role.lower())
+                    except ValueError:
+                        # Fallback or skip
+                        continue
+
+                    await self.mission_user_repo.create(
+                        mission_id=mission.id,
+                        user_id=user.id,
+                        role=role_enum
+                    )
+                else:
+                    # Send Email Invitation
+                    send_invitation_email(
+                        email=assignment.email,
+                        mission_name=mission.name,
+                        role=assignment.role
+                    )
+
         await self.db.commit()
         await self.db.refresh(mission)
         return mission
-    
     async def get_mission(self, mission_id: str) -> Mission:
         """Get mission by ID."""
         mission = await self.mission_repo.get_by_id(mission_id)

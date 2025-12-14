@@ -14,9 +14,8 @@ from app.core.security import (
     create_token_pair
 )
 from app.repositories.user import UserRepository
-from app.repositories.account import AccountRepository
 from app.repositories.account_user import AccountUserRepository
-from app.repositories.role import RoleRepository
+from app.repositories.account import AccountRepository
 from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin
 
@@ -66,45 +65,15 @@ class AuthService:
             is_active=True
         )
         
-        # Create account for new user (SaaS multi-tenancy)
-        account_repo = AccountRepository(self.db)
-        account_user_repo = AccountUserRepository(self.db)
-        role_repo = RoleRepository(self.db)
-        
-        # Create account
-        account = await account_repo.create(
-            account_name=f"{user_data.full_name}'s Organization",
-            created_by=user.id,
-            is_active=True
-        )
-        
-        # Create default "admin" role for the account (or get existing)
-        existing_role = await role_repo.get_by_name_and_account("admin", str(account.id))
-        if existing_role:
-            default_role = existing_role
-        else:
-            default_role = await role_repo.create(
-                name="admin",
-                account_id=account.id,
-                description="Account administrator with full access"
-            )
-        
-        # Link user to account with admin role
-        await account_user_repo.create(
-            account_id=account.id,
-            user_id=user.id,
-            role_id=default_role.id
-        )
-        
         # Commit transaction
         await self.db.commit()
         await self.db.refresh(user)
         
-        # Create tokens with account_id for SaaS context
+        # Create tokens with no account_id initially
         tokens = create_token_pair(
             user_id=str(user.id),
             email=user.email,
-            account_id=str(account.id)
+            account_id=None
         )
         
         return user, tokens
@@ -147,14 +116,39 @@ class AuthService:
                 detail="User account is inactive"
             )
         
-        # Get user's accounts to determine default account
+        # Get user's accounts
         account_user_repo = AccountUserRepository(self.db)
         account_users = await account_user_repo.get_by_user_id(str(user.id))
         
-        # Use first account if available, otherwise None
+        # Prepare available accounts list
+        available_accounts = []
+        # Get account details for each association (assuming eager load or separate query)
+        account_repo = AccountRepository(self.db)
+        for au in account_users:
+            acc = await account_repo.get_by_id(au.account_id)
+            if acc and acc.is_active:
+                available_accounts.append({
+                    "id": str(acc.id),
+                    "name": acc.account_name
+                })
+        
+        # Determine account context
         account_id = None
-        if account_users:
-            account_id = str(account_users[0].account_id)
+        
+        # If user requested a specific account
+        if login_data.account_id:
+            # Verify user belongs to this account
+            if any(str(acc["id"]) == login_data.account_id for acc in available_accounts):
+                account_id = login_data.account_id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User is not a member of the requested account"
+                )
+        # Else if only one account exists, select it by default (optional convenience)
+        elif len(available_accounts) == 1:
+            account_id = available_accounts[0]["id"]
+        # Else: account_id remains None (user must select later, or use default features)
         
         # Create tokens with account_id for SaaS context
         tokens = create_token_pair(
@@ -163,7 +157,7 @@ class AuthService:
             account_id=account_id
         )
         
-        return user, tokens
+        return user, tokens, available_accounts
     
     async def refresh_token(self, refresh_token: str) -> dict:
         """

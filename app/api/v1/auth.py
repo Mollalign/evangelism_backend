@@ -60,13 +60,14 @@ async def login(
     Validates user credentials and returns JWT tokens for authenticated requests.
     """
     auth_service = AuthService(db)
-    user, tokens = await auth_service.login(login_data)
+    user, tokens, available_accounts = await auth_service.login(login_data)
     
     return AuthResponse(
         user=UserResponse.from_user(user),
         access_token=tokens["access_token"],
         refresh_token=tokens["refresh_token"],
-        token_type=tokens["token_type"]
+        token_type=tokens["token_type"],
+        available_accounts=available_accounts
     )
 
 

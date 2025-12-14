@@ -28,6 +28,7 @@ class UserLogin(BaseModel):
     
     email: EmailStr = Field(..., description="User's email address")
     password: str = Field(..., description="User password")
+    account_id: Optional[str] = Field(None, description="Optional: Account ID to login directly into")
 
 
 class TokenRefresh(BaseModel):
@@ -49,6 +50,10 @@ class TokenResponse(BaseModel):
     refresh_token: str = Field(..., description="JWT refresh token")
     token_type: str = Field(default="bearer", description="Token type")
 
+
+class AccountSummary(BaseModel):
+    id: str
+    name: str
 
 class UserResponse(BaseModel):
     """User response schema (without sensitive data)."""
@@ -83,6 +88,7 @@ class AuthResponse(BaseModel):
     access_token: str = Field(..., description="JWT access token")
     refresh_token: str = Field(..., description="JWT refresh token")
     token_type: str = Field(default="bearer", description="Token type")
+    available_accounts: Optional[list[AccountSummary]] = Field(None, description="List of accounts the user is a member of")
 
 
 class MessageResponse(BaseModel):
