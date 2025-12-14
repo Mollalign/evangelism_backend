@@ -114,3 +114,35 @@ async def logout(
     consistency with the API contract.
     """
     return MessageResponse(message="Successfully logged out")
+
+
+@router.post("/switch-account/{account_id}", response_model=TokenResponse)
+async def switch_account(
+    account_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Switch to a different account (creates new token with new account_id).
+    
+    This allows users who belong to multiple accounts to switch between them.
+    The new token will have the specified account_id in its payload.
+    """
+    from app.core.dependencies import verify_account_access
+    from app.core.security import create_token_pair
+    
+    # Verify user has access to account
+    account = await verify_account_access(account_id, current_user, db)
+    
+    # Create new token with new account_id
+    tokens = create_token_pair(
+        user_id=str(current_user.id),
+        email=current_user.email,
+        account_id=account_id
+    )
+    
+    return TokenResponse(
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],  # Keep same refresh token
+        token_type=tokens["token_type"]
+    )

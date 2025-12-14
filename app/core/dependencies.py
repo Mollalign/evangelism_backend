@@ -127,22 +127,80 @@ async def get_current_active_user(
 
 async def verify_account_access(
     account_id: str,
-    current_user = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """
     Dependency to verify user has access to an account.
     
     Usage:
-        @router.get("/accounts/{account_id}/missions")
+        @router.get("/missions")
         async def get_missions(
-            account_id: str,
-            _: None = Depends(verify_account_access(account_id))
+            account_id: str = Query(...),
+            _: Account = Depends(verify_account_access(account_id))
         ):
             ...
     """
-    # TODO: Check if user belongs to account
-    # TODO: Raise 403 if no access
+    from app.repositories.account_user import AccountUserRepository
+    from app.repositories.account import AccountRepository
     
-    return True
+    account_user_repo = AccountUserRepository(db)
+    account_repo = AccountRepository(db)
+    
+    # Check if user belongs to account
+    account_user = await account_user_repo.get_by_user_and_account(
+        user_id=str(current_user.id),
+        account_id=account_id
+    )
+    
+    if not account_user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this account"
+        )
+    
+    # Get and validate account
+    account = await account_repo.get_by_id(account_id)
+    
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found"
+        )
+    
+    if not account.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive"
+        )
+    
+    return account
+
+
+async def get_current_account(
+    current_user: User = Depends(get_current_active_user),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Get current account from JWT token.
+    
+    Returns the account_id from the JWT token and verifies access.
+    """
+    if not credentials:
+        return None
+    
+    try:
+        token = credentials.credentials
+        payload = decode_token(token)
+        account_id = payload.get("account_id")
+        
+        if account_id:
+            return await verify_account_access(account_id, current_user, db)
+    except HTTPException:
+        return None
+    except Exception:
+        return None
+    
+    return None
 

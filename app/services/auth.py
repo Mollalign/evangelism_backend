@@ -14,6 +14,9 @@ from app.core.security import (
     create_token_pair
 )
 from app.repositories.user import UserRepository
+from app.repositories.account import AccountRepository
+from app.repositories.account_user import AccountUserRepository
+from app.repositories.role import RoleRepository
 from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin
 
@@ -63,14 +66,41 @@ class AuthService:
             is_active=True
         )
         
+        # Create account for new user (SaaS multi-tenancy)
+        account_repo = AccountRepository(self.db)
+        account_user_repo = AccountUserRepository(self.db)
+        role_repo = RoleRepository(self.db)
+        
+        # Create account
+        account = await account_repo.create(
+            account_name=f"{user_data.full_name}'s Organization",
+            created_by=user.id,
+            is_active=True
+        )
+        
+        # Create default "admin" role for the account
+        default_role = await role_repo.create(
+            name="admin",
+            account_id=account.id,
+            description="Account administrator with full access"
+        )
+        
+        # Link user to account with admin role
+        await account_user_repo.create(
+            account_id=account.id,
+            user_id=user.id,
+            role_id=default_role.id
+        )
+        
         # Commit transaction
         await self.db.commit()
         await self.db.refresh(user)
         
-        # Create tokens
+        # Create tokens with account_id for SaaS context
         tokens = create_token_pair(
             user_id=str(user.id),
-            email=user.email
+            email=user.email,
+            account_id=str(account.id)
         )
         
         return user, tokens
@@ -113,10 +143,20 @@ class AuthService:
                 detail="User account is inactive"
             )
         
-        # Create tokens
+        # Get user's accounts to determine default account
+        account_user_repo = AccountUserRepository(self.db)
+        account_users = await account_user_repo.get_by_user_id(str(user.id))
+        
+        # Use first account if available, otherwise None
+        account_id = None
+        if account_users:
+            account_id = str(account_users[0].account_id)
+        
+        # Create tokens with account_id for SaaS context
         tokens = create_token_pair(
             user_id=str(user.id),
-            email=user.email
+            email=user.email,
+            account_id=account_id
         )
         
         return user, tokens
@@ -172,12 +212,18 @@ class AuthService:
                     detail="User account is inactive"
                 )
             
-            # Create new access token
+            # Preserve account_id from refresh token if present
+            account_id = payload.get("account_id")
+            
+            # Create new access token (preserve account_id)
             token_data = {
                 "user_id": str(user.id),
                 "sub": email,
                 "email": email
             }
+            if account_id:
+                token_data["account_id"] = account_id
+            
             access_token = create_access_token(data=token_data)
             
             return {

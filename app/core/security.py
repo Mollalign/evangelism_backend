@@ -217,20 +217,26 @@ def get_email_from_token(token: str) -> Optional[str]:
         return None
 
 
-def create_token_pair(user_id: str, email: str, additional_claims: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+def create_token_pair(
+    user_id: str, 
+    email: str, 
+    account_id: Optional[str] = None,
+    additional_claims: Optional[Dict[str, Any]] = None
+) -> Dict[str, str]:
     """
     Create both access and refresh tokens for a user.
     
     Args:
         user_id: User's UUID as string
         email: User's email address
+        account_id: Optional account UUID as string (for SaaS multi-tenancy)
         additional_claims: Optional additional claims to include in tokens
         
     Returns:
         Dictionary with 'access_token' and 'refresh_token'
         
     Example:
-        >>> tokens = create_token_pair(str(user.id), user.email)
+        >>> tokens = create_token_pair(str(user.id), user.email, account_id=str(account.id))
         >>> access_token = tokens["access_token"]
         >>> refresh_token = tokens["refresh_token"]
     """
@@ -239,6 +245,10 @@ def create_token_pair(user_id: str, email: str, additional_claims: Optional[Dict
         "sub": email,  # Standard JWT claim for subject
         "email": email
     }
+    
+    # Add account_id if provided (for SaaS multi-tenancy)
+    if account_id:
+        token_data["account_id"] = account_id
     
     if additional_claims:
         token_data.update(additional_claims)
