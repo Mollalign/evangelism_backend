@@ -39,7 +39,7 @@ async def get_user_accounts(
     for au in account_users:
         account = await account_repo.get_by_id(str(au.account_id))
         if account and account.is_active:
-            accounts.append(AccountResponse.from_account(account))
+            accounts.append(AccountResponse.model_validate(account))
     
     return accounts
 
