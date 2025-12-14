@@ -78,12 +78,16 @@ class AuthService:
             is_active=True
         )
         
-        # Create default "admin" role for the account
-        default_role = await role_repo.create(
-            name="admin",
-            account_id=account.id,
-            description="Account administrator with full access"
-        )
+        # Create default "admin" role for the account (or get existing)
+        existing_role = await role_repo.get_by_name_and_account("admin", str(account.id))
+        if existing_role:
+            default_role = existing_role
+        else:
+            default_role = await role_repo.create(
+                name="admin",
+                account_id=account.id,
+                description="Account administrator with full access"
+            )
         
         # Link user to account with admin role
         await account_user_repo.create(
